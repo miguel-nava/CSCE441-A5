@@ -16,6 +16,7 @@
 #include "Program.h"
 #include "MatrixStack.h"
 #include "Shape.h"
+#include "Helicopter.h"
 
 #define M_PI       3.14159265358979323846   // pi
 
@@ -29,7 +30,15 @@ string RESOURCE_DIR = ""; // Where the resources are loaded from
 shared_ptr<Program> progNormal;
 shared_ptr<Program> progSimple;
 shared_ptr<Camera> camera;
-shared_ptr<Shape> bunny;
+
+glm::mat4 Bcr;
+
+shared_ptr<Helicopter> helicopter;
+
+shared_ptr<Shape> helicopter_body1;
+shared_ptr<Shape> helicopter_body2;
+shared_ptr<Shape> helicopter_prop1;
+shared_ptr<Shape> helicopter_prop2;
 
 static void error_callback(int error, const char *description)
 {
@@ -82,8 +91,14 @@ static void init()
 	glEnable(GL_DEPTH_TEST);
 	
 	keyToggles[(unsigned)'c'] = true;
+
+	Bcr[0] = glm::vec4(0.0f, 2.0f, 0.0f, 0.0f);
+	Bcr[1] = glm::vec4(-1.0f, 0.0f, 1.0f, 0.0f);
+	Bcr[2] = glm::vec4(2.0f, -5.0f, 4.0f, -1.0f);
+	Bcr[3] = glm::vec4(-1.0f, 3.0f, -3.0f, 1.0f);
+	Bcr *= 0.5;
 	
-	// For drawing the bunny
+	// For drawing the Helicopter
 	progNormal = make_shared<Program>();
 	progNormal->setShaderNames(RESOURCE_DIR + "normal_vert.glsl", RESOURCE_DIR + "normal_frag.glsl");
 	progNormal->setVerbose(true);
@@ -94,7 +109,7 @@ static void init()
 	progNormal->addAttribute("aNor");
 	progNormal->setVerbose(false);
 	
-	// For drawing the frames
+	// For drawing the frames & grid
 	progSimple = make_shared<Program>();
 	progSimple->setShaderNames(RESOURCE_DIR + "simple_vert.glsl", RESOURCE_DIR + "simple_frag.glsl");
 	progSimple->setVerbose(true);
@@ -102,11 +117,26 @@ static void init()
 	progSimple->addUniform("P");
 	progSimple->addUniform("MV");
 	progSimple->setVerbose(false);
+
+	helicopter_body1 = make_shared<Shape>();
+	helicopter_body1->loadMesh(RESOURCE_DIR + "helicopter_body1.obj");
+	helicopter_body1->init();
+
+	helicopter_body2 = make_shared<Shape>();
+	helicopter_body2->loadMesh(RESOURCE_DIR + "helicopter_body2.obj");
+	helicopter_body2->init();
 	
-	bunny = make_shared<Shape>();
-	bunny->loadMesh(RESOURCE_DIR + "bunny.obj");
-	bunny->init();
+	helicopter_prop1 = make_shared<Shape>();
+	helicopter_prop1->loadMesh(RESOURCE_DIR + "helicopter_prop1.obj");
+	helicopter_prop1->init();
 	
+	helicopter_prop2 = make_shared<Shape>();
+	helicopter_prop2->loadMesh(RESOURCE_DIR + "helicopter_prop2.obj");
+	helicopter_prop2->init();
+	
+	helicopter = make_shared<Helicopter>();
+	helicopter->init(RESOURCE_DIR, "helicopter_body1.obj", "helicopter_body2.obj", "helicopter_prop1.obj", "helicopter_prop2.obj");
+
 	camera = make_shared<Camera>();
 	
 	// Initialize time.
@@ -171,16 +201,26 @@ void render()
 	glVertex3f(0, 0, 1);
 	glEnd();
 	glLineWidth(1);
+
+	// Draw grid
+	glColor3f(0.66, 0.66, 0.66);
+	glBegin(GL_LINES);
+	for (int i = -5; i < 5; i++) {
+		glVertex3f(i, 0, -5);
+		glVertex3f(i, 0, 5);
+		glVertex3f(-5, 0, i);
+		glVertex3f(5, 0, i);
+	}
+	glEnd();
 	progSimple->unbind();
 	GLSL::checkError(GET_FILE_LINE);
+
+
 	
 	// Draw the bunnies
 	progNormal->bind();
 	// Send projection matrix (same for all bunnies)
 	glUniformMatrix4fv(progNormal->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
-	
-	// The center of the bunny is at (-0.2802, 0.932, 0.0851)
-	glm::vec3 center(-0.2802, 0.932, 0.0851);
 	
 	// Alpha is the linear interpolation parameter between 0 and 1
 	float alpha = std::fmod(0.5f*t, 1.0f);
@@ -207,45 +247,12 @@ void render()
 		axis1 = glm::normalize(axis1);
 		q1 = glm::angleAxis((float)(90.0f/180.0f*M_PI), axis1);
 	}
-	
-	glm::vec3 p0(-1.0f, 0.0f, 0.0f);
-	glm::vec3 p1( 1.0f, 0.0f, 0.0f);
+	MV->scale(1);
 
-	// Draw the bunny three times: left, right, and interpolated.
-	// left:  use p0 for position and q0 for orientation
-	// right: use p1 for position and q1 for orientation
+	MV->pushMatrix();
+	helicopter->draw(progNormal, MV);
+	MV->popMatrix();
 
-	// LEFT
-	glm::mat4 R1 = glm::toMat4(q0);
-	MV->pushMatrix();
-	MV->translate(p0);
-	MV->multMatrix(R1);
-	MV->translate(-center);
-	glUniformMatrix4fv(progNormal->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
-	MV->popMatrix();
-	bunny->draw(progNormal);
-	
-	// RIGHT
-	glm::mat4 R2 = glm::toMat4(q1);
-	MV->pushMatrix();
-	MV->translate(p1);
-	MV->multMatrix(R2);
-	MV->translate(-center);
-	glUniformMatrix4fv(progNormal->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
-	MV->popMatrix();
-	bunny->draw(progNormal);
-	
-	// INTERPOLATED
-	glm::vec3 p = (1 - alpha)*p0 + alpha*p1;
-	glm::mat4 R3 = glm::toMat4(glm::normalize((1.0f - alpha)*q0 + alpha*q1));
-	MV->pushMatrix();
-	MV->translate(p);
-	MV->multMatrix(R3);
-	MV->translate(-center);
-	glUniformMatrix4fv(progNormal->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
-	MV->popMatrix();
-	bunny->draw(progNormal);
-	
 	progNormal->unbind();
 	
 	// Pop stacks
