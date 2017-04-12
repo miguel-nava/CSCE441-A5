@@ -33,6 +33,7 @@ shared_ptr<Program> progSimple;
 shared_ptr<Camera> camera;
 shared_ptr<Helicopter> helicopter;
 
+glm::mat4 helicopter_matrix;
 glm::mat4 Bcr;
 
 vector<glm::vec3> cps;
@@ -211,12 +212,13 @@ static void init()
 	progSimple->addUniform("MV");
 	progSimple->setVerbose(false);
 	
+	helicopter_matrix = glm::mat4();
 	helicopter = make_shared<Helicopter>();
 	helicopter->init(RESOURCE_DIR, "helicopter_body1.obj", "helicopter_body2.obj", "helicopter_prop1.obj", "helicopter_prop2.obj");
 
 	//initialize the 7 keyframes & control points
 	cps.push_back(glm::vec3(0, 0, 0));
-	cps.push_back(glm::vec3(-4.5, 3, 3));
+	cps.push_back(glm::vec3(-1.5, 3, 3));
 	cps.push_back(glm::vec3(-1.5, 6, -3));
 	cps.push_back(glm::vec3(3, 3, 3));
 	cps.push_back(glm::vec3(6, 3, -3));
@@ -301,13 +303,13 @@ void interpolate(shared_ptr<Program> prog, shared_ptr<MatrixStack> MV, float u, 
 	
 	glm::vec4 qVec = Gq * (Bcr * uVec);
 	glm::quat q(qVec[3], qVec[0], qVec[1], qVec[2]); // (w, x, y, z)
-	glm::mat4 R = glm::toMat4(glm::normalize(q));
-	R[3] = glm::vec4(p.x, p.y, p.z, 1.0f);
+	helicopter_matrix = glm::toMat4(glm::normalize(q));
+	helicopter_matrix[3] = glm::vec4(p.x, p.y, p.z, 1.0f);
 
 	
 	MV->pushMatrix();
 	//MV->translate(p.x, p.y, p.z); // don't need to do this 
-	MV->multMatrix(R);
+	MV->multMatrix(helicopter_matrix);
 	helicopter->draw(prog, MV);
 	MV->popMatrix();
 }
@@ -316,15 +318,14 @@ void render()
 {
 	// Update time.
 	double t = glfwGetTime();
-	float tmax = 5;
+	float tmax = 2.5;
 	float umax = keyframes.size() - 3;
 
 	// Alpha is the linear interpolation parameter between 0 and 1
-	float speed = 0.75f;
-	float alpha = std::fmod(speed*t, 1.0f);
-	//float u = std::fmod(speed*t, umax);
+	float alpha = std::fmod(t, 1.0f);
 	float tNorm = std::fmod(t, tmax) / tmax;
 	float sNorm = tNorm;
+	//float sNorm = (tNorm)*(tNorm - 1)*(tNorm - 2) + 1;
 	float s = smax * sNorm;
 	float u = s2u(s);
 	
@@ -357,8 +358,11 @@ void render()
 	P->pushMatrix();
 	camera->applyProjectionMatrix(P);
 	MV->pushMatrix();
-
-	camera->applyViewMatrix(MV);
+	if (keyToggles[(unsigned)' ']) {
+		camera->applyLookAtMatrix(MV, helicopter_matrix);
+	} 
+	else
+		camera->applyViewMatrix(MV);
 	
 	// Draw origin frame
 	progSimple->bind();
@@ -376,64 +380,40 @@ void render()
 	glVertex3f(0, 0, 0);
 	glVertex3f(0, 0, 1);
 	glEnd();
-	glLineWidth(1);
 
 	// Draw grid
+	glUniformMatrix4fv(progSimple->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
+	glUniformMatrix4fv(progSimple->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 	glColor3f(0.66, 0.66, 0.66);
+	glLineWidth(2);
 	glBegin(GL_LINES);
 	for (int i = -10; i < 10; i++) {
-		glVertex3f(i, -0.5, -10);
-		glVertex3f(i, -0.5, 10);
-		glVertex3f(-10, -0.5, i);
-		glVertex3f(10, -0.5, i);
+		glVertex3f(i, 0, -10);
+		glVertex3f(i, 0, 10);
+		glVertex3f(-10, 0, i);
+		glVertex3f(10, 0, i);
 	}
 	glEnd();
 	progSimple->unbind();
 	GLSL::checkError(GET_FILE_LINE);
 	
-	// Draw the bunnies
+	// Draw the Helicopters
 	progNormal->bind();
-	// Send projection matrix (same for all bunnies)
+	// Send projection matrix (same for all helicopters)
 	glUniformMatrix4fv(progNormal->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
 	
-
-	
-	// The axes of rotatio for the source and target bunnies
-	glm::vec3 axis0, axis1;
-	axis0.x = keyToggles[(unsigned)'x'] ? 1.0 : 0.0f;
-	axis0.y = keyToggles[(unsigned)'y'] ? 1.0 : 0.0f;
-	axis0.z = keyToggles[(unsigned)'z'] ? 1.0 : 0.0f;
-	axis1.x = keyToggles[(unsigned)'X'] ? 1.0 : 0.0f;
-	axis1.y = keyToggles[(unsigned)'Y'] ? 1.0 : 0.0f;
-	axis1.z = keyToggles[(unsigned)'Z'] ? 1.0 : 0.0f;
-
-	glm::quat q0, q1;
-	if(glm::length(axis0) == 0) {
-		q0 = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-	} else {
-		axis0 = glm::normalize(axis0);
-		q0 = glm::angleAxis((float)(90.0f/180.0f*M_PI), axis0);
-	}
-	if(glm::length(axis1) == 0) {
-		q1 = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-	} else {
-		axis1 = glm::normalize(axis1);
-		q1 = glm::angleAxis((float)(90.0f/180.0f*M_PI), axis1);
-	}
-	MV->scale(1);
-
 	MV->pushMatrix();
-	//helicopter->draw(progNormal, MV);
+	helicopter->draw(progNormal, MV);
 	if (keyToggles[(unsigned)'k'] || keyToggles[(unsigned)'K']) {
 		helicopter->propRotate(true);
 		catmull_rom_spline();
 		for (int i = 0; i < keyframes.size(); i++) {
 			keyframes[i].drawKeyFrame(progNormal, MV);
 		}
-
 		interpolate(progNormal, MV, u, alpha);
 	}
 	else {
+		helicopter_matrix = glm::mat4();
 		helicopter->propRotate(false);
 		helicopter->draw(progNormal, MV);
 	}

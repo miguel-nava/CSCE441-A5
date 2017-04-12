@@ -32,6 +32,7 @@ public:
 	void mouseMoved(float x, float y);
 	void applyProjectionMatrix(std::shared_ptr<MatrixStack> P) const;
 	void applyViewMatrix(std::shared_ptr<MatrixStack> MV) const;
+	void applyLookAtMatrix(std::shared_ptr<MatrixStack> MV, glm::mat4 helicopter_matrix);
 	
 private:
 	float aspect;
@@ -41,6 +42,7 @@ private:
 	glm::vec2 rotations;
 	glm::vec3 translations;
 	glm::vec2 mousePrev;
+
 	int state;
 	float rfactor;
 	float tfactor;

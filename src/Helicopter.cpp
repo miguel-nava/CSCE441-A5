@@ -49,7 +49,8 @@ void Helicopter::draw(const std::shared_ptr<Program> prog, std::shared_ptr<Matri
 	else {
 		theta = 0;
 	}
-	
+	MV->pushMatrix();
+	MV->translate(0, 0.5, 0);
 	// Helicopter_prop1 
 	MV->pushMatrix();
 	MV->translate(0.0, 0.4819, 0.0);
@@ -74,4 +75,5 @@ void Helicopter::draw(const std::shared_ptr<Program> prog, std::shared_ptr<Matri
 	MV->popMatrix();
 	b1.draw(prog);
 	b2.draw(prog);
+	MV->popMatrix();
 }

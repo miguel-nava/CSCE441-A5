@@ -11,11 +11,16 @@ Camera::Camera() :
 	fovy((float)(45.0*M_PI/180.0)),
 	znear(0.1f),
 	zfar(1000.0f),
-	rotations(0.0, 0.0),
-	translations(0.0f, 0.0f, -5.0f),
+	rotations(0.60, 0.15),
+	translations(0.0f, 0.0f, -17.0f), // A-WHOOP
 	rfactor(0.01f),
 	tfactor(0.001f),
-	sfactor(0.005f)
+	sfactor(0.005f),
+	Pos(-7, 0, 7),
+	Front(1, 0, -1),
+	Up(0, 1, 0),
+	yaw(-90),
+	pitch(0)
 {
 }
 
@@ -66,4 +71,12 @@ void Camera::applyViewMatrix(std::shared_ptr<MatrixStack> MV) const
 	MV->translate(translations);
 	MV->rotate(rotations.y, glm::vec3(1.0f, 0.0f, 0.0f));
 	MV->rotate(rotations.x, glm::vec3(0.0f, 1.0f, 0.0f));
+}
+
+void Camera::applyLookAtMatrix(std::shared_ptr<MatrixStack> MV, glm::mat4 helicopter_matrix)
+{	
+	glm::mat4 view = glm::inverse(helicopter_matrix);
+	MV->translate(0, 0, -5);
+	MV->rotate(glm::radians(-90.0f), 0, 1, 0);
+	MV->multMatrix(view);
 }
