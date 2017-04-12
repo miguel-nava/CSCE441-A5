@@ -34,8 +34,12 @@ shared_ptr<Camera> camera;
 shared_ptr<Helicopter> helicopter;
 
 glm::mat4 Bcr;
-vector<KeyFrame> keyframes;
+
 vector<glm::vec3> cps;
+vector<KeyFrame> keyframes;
+vector<pair<float, float> > usTable;
+
+float smax;
 
 static void error_callback(int error, const char *description)
 {
@@ -76,6 +80,98 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 		bool alt = mods & GLFW_MOD_ALT;
 		camera->mouseClicked(xmouse, ymouse, shift, ctrl, alt);
 	}
+}
+
+void buildTable()
+{
+	float max_u = cps.size() - 3; // this is because ther eare 8 points and so 8 - 3 = 5
+
+	if (cps.size() >= 4) {
+		// INSERT CODE HERE
+		glm::mat4 G;
+		float step_size;
+
+		// inserting first element on to the table which is 0,0
+		usTable.push_back(make_pair(0.0f, 0.0f));
+
+
+		cout << "This is Task 1" << endl;
+		cout << "u" << "    " << "s" << endl;
+		std::cout << 0 << "    " << 0 << std::endl;
+
+
+		float s = 0;
+		for (int u = 0; u < max_u; u++) {
+			step_size = 0.2;
+			float u_a = 0;
+			float u_b = 0;
+
+			// re-establish the control points accordingly for the segments
+			G[0] = glm::vec4(cps[u], 0);
+			G[1] = glm::vec4(cps[u + 1], 0);
+			G[2] = glm::vec4(cps[u + 2], 0);
+			G[3] = glm::vec4(cps[u + 3], 0);
+
+			while (u_a < 1) {
+				u_b = u_a + step_size;
+
+				glm::vec4 u_a_(1, u_a, u_a*u_a, u_a*u_a*u_a);
+				glm::vec4 u_b_(1, u_b, u_b*u_b, u_b*u_b*u_b);
+
+				glm::vec4 p_a = G*Bcr*u_a_;
+				glm::vec4 p_b = G*Bcr*u_b_;
+
+				s += glm::length(p_b - p_a);
+
+				u_a += step_size;
+
+				std::cout << (u + u_a) << "    " << s << std::endl;
+
+				usTable.push_back(make_pair(u + u_a, s));
+
+			}
+
+		}
+		smax = s;
+	}
+	else {
+		usTable.clear();
+	}
+}
+
+float s2u(float s)
+{
+	// INSERT CODE HERE
+	float alpha = 0; // alpha = (s - s0) / (s1 - s0)
+
+	float s0 = 0;
+	float s1 = 1;
+
+	float u = 0;  // u = (1 - alpha)*u0 + alpha*u1
+	float u0 = 0;
+	float u1 = 0;
+
+	// find s0 and s1
+	for (int i = 0; i < usTable.size(); i++) {
+		float currentU = usTable[i].first;
+		float currentS = usTable[i].second;
+		if (currentS > s) {
+			/*	if (currentU == 0) {
+			return 0.0f;
+			}*/
+			u0 = usTable[i - 1].first;
+			s0 = usTable[i - 1].second;
+			u1 = currentU;
+			s1 = currentS;
+			break; // break because we found our s0 and s1
+		}
+	}
+
+	alpha = (s - s0) / (s1 - s0);
+	u = (1 - alpha)*u0 + alpha*u1;
+
+
+	return u;
 }
 
 static void init()
@@ -120,21 +216,23 @@ static void init()
 
 	//initialize the 7 keyframes & control points
 	cps.push_back(glm::vec3(0, 0, 0));
-	cps.push_back(glm::vec3(-1.5, 1, 1));
-	cps.push_back(glm::vec3(-0.5, 2, -1));
-	cps.push_back(glm::vec3(1, 1, 1));
-	cps.push_back(glm::vec3(2, 1, -1));
+	cps.push_back(glm::vec3(-4.5, 3, 3));
+	cps.push_back(glm::vec3(-1.5, 6, -3));
+	cps.push_back(glm::vec3(3, 3, 3));
+	cps.push_back(glm::vec3(6, 3, -3));
 	cps.push_back(cps[0]);
 	cps.push_back(cps[1]);
 	cps.push_back(cps[2]);
-	keyframes.push_back(KeyFrame(helicopter, cps[0]));
-	keyframes.push_back(KeyFrame(helicopter, cps[1]));
-	keyframes.push_back(KeyFrame(helicopter, cps[2]));
-	keyframes.push_back(KeyFrame(helicopter, cps[3]));
-	keyframes.push_back(KeyFrame(helicopter, cps[4]));
-	keyframes.push_back(KeyFrame(helicopter, cps[5]));
-	keyframes.push_back(KeyFrame(helicopter, cps[6]));
-	keyframes.push_back(KeyFrame(helicopter, cps[7]));
+	keyframes.push_back(KeyFrame(helicopter, cps[0], 90.0f, 0, 1, 0)); // first
+	keyframes.push_back(KeyFrame(helicopter, cps[1], 90.0f, 1, 0, 0)); // second
+	keyframes.push_back(KeyFrame(helicopter, cps[2], 90.0f, 0, 0, 1));
+	keyframes.push_back(KeyFrame(helicopter, cps[3], 90.0f, 0, 1, 0));
+	keyframes.push_back(KeyFrame(helicopter, cps[4], 90.0f, 0, 0, 1));
+	keyframes.push_back(keyframes[0]);
+	keyframes.push_back(keyframes[1]);
+	keyframes.push_back(keyframes[2]);
+
+	buildTable();
 
 	camera = make_shared<Camera>();
 	
@@ -146,6 +244,7 @@ static void init()
 	// of your OpenGL error.
 	GLSL::checkError(GET_FILE_LINE);
 }
+
 void catmull_rom_spline() {
 
 	glm::mat4 G;
@@ -173,28 +272,61 @@ void catmull_rom_spline() {
 	}
 	glEnd();
 }
-void interpolate(shared_ptr<Program> prog, shared_ptr<MatrixStack> MV, float u) {
-	glm::mat4 G;
-	G[0] = glm::vec4(cps[(int)floor(u)], 0);
-	G[1] = glm::vec4(cps[(int)floor(u) + 1], 0);
-	G[2] = glm::vec4(cps[(int)floor(u) + 2], 0);
-	G[3] = glm::vec4(cps[(int)floor(u) + 3], 0);
+
+void interpolate(shared_ptr<Program> prog, shared_ptr<MatrixStack> MV, float u, float alpha) {
+	int i = (int)floor(u);
+	
+	glm::mat4 Gp;
+	Gp[0] = glm::vec4(cps[i], 0);
+	Gp[1] = glm::vec4(cps[i + 1], 0);
+	Gp[2] = glm::vec4(cps[i + 2], 0);
+	Gp[3] = glm::vec4(cps[i + 3], 0);
+
+	glm::mat4 Gq;
+	glm::quat k1 = keyframes[i].getRot();
+	glm::quat k2 = keyframes[i+1].getRot();
+	if (glm::dot(k1, k2) < 0) k2 = -k2;
+	glm::quat k3 = keyframes[i+2].getRot();
+	if (glm::dot(k2, k3) < 0) k3 = -k3;
+	glm::quat k4 = keyframes[i+3].getRot();
+	if (glm::dot(k3, k4) < 0) k4 = -k4;
+	Gq[0] = glm::vec4(k1.x, k1.y, k1.z, k1.w);
+	Gq[1] = glm::vec4(k2.x, k2.y, k2.z, k2.w);
+	Gq[2] = glm::vec4(k3.x, k3.y, k3.z, k3.w);
+	Gq[3] = glm::vec4(k4.x, k4.y, k4.z, k4.w);
+
 	u = fmod(u, 1.0);
 	glm::vec4 uVec(1, u, u*u, u*u*u);
-	glm::vec4 p = G*Bcr*uVec;
+	glm::vec4 p = Gp*Bcr*uVec;
+	
+	glm::vec4 qVec = Gq * (Bcr * uVec);
+	glm::quat q(qVec[3], qVec[0], qVec[1], qVec[2]); // (w, x, y, z)
+	glm::mat4 R = glm::toMat4(glm::normalize(q));
+	R[3] = glm::vec4(p.x, p.y, p.z, 1.0f);
+
+	
 	MV->pushMatrix();
-	MV->translate(p.x, p.y, p.z);
+	//MV->translate(p.x, p.y, p.z); // don't need to do this 
+	MV->multMatrix(R);
 	helicopter->draw(prog, MV);
 	MV->popMatrix();
 }
+
 void render()
 {
 	// Update time.
 	double t = glfwGetTime();
-	// Alpha is the linear interpolation parameter between 0 and 1
-	float alpha = std::fmod(0.5f*t, 1.0f);
+	float tmax = 5;
 	float umax = keyframes.size() - 3;
-	float u = std::fmod(t, umax);
+
+	// Alpha is the linear interpolation parameter between 0 and 1
+	float speed = 0.75f;
+	float alpha = std::fmod(speed*t, 1.0f);
+	//float u = std::fmod(speed*t, umax);
+	float tNorm = std::fmod(t, tmax) / tmax;
+	float sNorm = tNorm;
+	float s = smax * sNorm;
+	float u = s2u(s);
 	
 	// Get current frame buffer size.
 	int width, height;
@@ -249,11 +381,11 @@ void render()
 	// Draw grid
 	glColor3f(0.66, 0.66, 0.66);
 	glBegin(GL_LINES);
-	for (int i = -5; i < 5; i++) {
-		glVertex3f(i, 0, -5);
-		glVertex3f(i, 0, 5);
-		glVertex3f(-5, 0, i);
-		glVertex3f(5, 0, i);
+	for (int i = -10; i < 10; i++) {
+		glVertex3f(i, -0.5, -10);
+		glVertex3f(i, -0.5, 10);
+		glVertex3f(-10, -0.5, i);
+		glVertex3f(10, -0.5, i);
 	}
 	glEnd();
 	progSimple->unbind();
@@ -291,17 +423,15 @@ void render()
 	MV->scale(1);
 
 	MV->pushMatrix();
-	helicopter->draw(progNormal, MV);
+	//helicopter->draw(progNormal, MV);
 	if (keyToggles[(unsigned)'k'] || keyToggles[(unsigned)'K']) {
 		helicopter->propRotate(true);
-		
 		catmull_rom_spline();
-		
 		for (int i = 0; i < keyframes.size(); i++) {
 			keyframes[i].drawKeyFrame(progNormal, MV);
 		}
 
-		interpolate(progNormal, MV, u);
+		interpolate(progNormal, MV, u, alpha);
 	}
 	else {
 		helicopter->propRotate(false);
