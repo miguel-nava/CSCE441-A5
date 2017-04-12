@@ -11,7 +11,7 @@
 //#include <glm/gtx/quaternion.hpp>
 
 Helicopter::Helicopter() {
-
+	rotate_prop = false;
 }
 
 Helicopter::~Helicopter() {
@@ -36,13 +36,20 @@ void Helicopter::init(std::string DIR, std::string body1, std::string body2, std
 	p2.loadMesh(DIR + prop2);
 	p2.init();
 }
-
+void Helicopter::propRotate(bool rotate) {
+	rotate_prop = rotate;
+}
 void Helicopter::draw(const std::shared_ptr<Program> prog, std::shared_ptr<MatrixStack> MV) {
 	t = glfwGetTime();
+	float theta;
 
-	float theta = (float)((int)(t * 360) % 360);
-	float theta2 = (float)((int)(t * 360) % 360);
-
+	if (rotate_prop) {
+		theta = (float)((int)(t * 360) % 360);
+	} 
+	else {
+		theta = 0;
+	}
+	
 	// Helicopter_prop1 
 	MV->pushMatrix();
 	MV->translate(0.0, 0.4819, 0.0);
@@ -55,7 +62,7 @@ void Helicopter::draw(const std::shared_ptr<Program> prog, std::shared_ptr<Matri
 	// Helicopter_prop2
 	MV->pushMatrix();
 	MV->translate(0.6228, 0.1179, 0.1365);
-	MV->rotate(-glm::radians(theta2), 0, 0, 1);
+	MV->rotate(-glm::radians(theta), 0, 0, 1);
 	MV->translate(-0.6228, -0.1179, -0.1365);
 	glUniformMatrix4fv(prog->getUniform("MV"), 1, GL_FALSE, glm::value_ptr(MV->topMatrix()));
 	MV->popMatrix();

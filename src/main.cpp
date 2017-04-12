@@ -17,6 +17,7 @@
 #include "MatrixStack.h"
 #include "Shape.h"
 #include "Helicopter.h"
+#include "KeyFrame.h"
 
 #define M_PI       3.14159265358979323846   // pi
 
@@ -30,15 +31,11 @@ string RESOURCE_DIR = ""; // Where the resources are loaded from
 shared_ptr<Program> progNormal;
 shared_ptr<Program> progSimple;
 shared_ptr<Camera> camera;
-
-glm::mat4 Bcr;
-
 shared_ptr<Helicopter> helicopter;
 
-shared_ptr<Shape> helicopter_body1;
-shared_ptr<Shape> helicopter_body2;
-shared_ptr<Shape> helicopter_prop1;
-shared_ptr<Shape> helicopter_prop2;
+glm::mat4 Bcr;
+vector<KeyFrame> keyframes;
+vector<glm::vec3> cps;
 
 static void error_callback(int error, const char *description)
 {
@@ -73,10 +70,10 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 	// Get current window size.
 	int width, height;
 	glfwGetWindowSize(window, &width, &height);
-	if(action == GLFW_PRESS) {
+	if (action == GLFW_PRESS) {
 		bool shift = mods & GLFW_MOD_SHIFT;
-		bool ctrl  = mods & GLFW_MOD_CONTROL;
-		bool alt   = mods & GLFW_MOD_ALT;
+		bool ctrl = mods & GLFW_MOD_CONTROL;
+		bool alt = mods & GLFW_MOD_ALT;
 		camera->mouseClicked(xmouse, ymouse, shift, ctrl, alt);
 	}
 }
@@ -117,25 +114,27 @@ static void init()
 	progSimple->addUniform("P");
 	progSimple->addUniform("MV");
 	progSimple->setVerbose(false);
-
-	helicopter_body1 = make_shared<Shape>();
-	helicopter_body1->loadMesh(RESOURCE_DIR + "helicopter_body1.obj");
-	helicopter_body1->init();
-
-	helicopter_body2 = make_shared<Shape>();
-	helicopter_body2->loadMesh(RESOURCE_DIR + "helicopter_body2.obj");
-	helicopter_body2->init();
-	
-	helicopter_prop1 = make_shared<Shape>();
-	helicopter_prop1->loadMesh(RESOURCE_DIR + "helicopter_prop1.obj");
-	helicopter_prop1->init();
-	
-	helicopter_prop2 = make_shared<Shape>();
-	helicopter_prop2->loadMesh(RESOURCE_DIR + "helicopter_prop2.obj");
-	helicopter_prop2->init();
 	
 	helicopter = make_shared<Helicopter>();
 	helicopter->init(RESOURCE_DIR, "helicopter_body1.obj", "helicopter_body2.obj", "helicopter_prop1.obj", "helicopter_prop2.obj");
+
+	//initialize the 7 keyframes & control points
+	cps.push_back(glm::vec3(0, 0, 0));
+	cps.push_back(glm::vec3(-1.5, 1, 1));
+	cps.push_back(glm::vec3(-0.5, 2, -1));
+	cps.push_back(glm::vec3(1, 1, 1));
+	cps.push_back(glm::vec3(2, 1, -1));
+	cps.push_back(cps[0]);
+	cps.push_back(cps[1]);
+	cps.push_back(cps[2]);
+	keyframes.push_back(KeyFrame(helicopter, cps[0]));
+	keyframes.push_back(KeyFrame(helicopter, cps[1]));
+	keyframes.push_back(KeyFrame(helicopter, cps[2]));
+	keyframes.push_back(KeyFrame(helicopter, cps[3]));
+	keyframes.push_back(KeyFrame(helicopter, cps[4]));
+	keyframes.push_back(KeyFrame(helicopter, cps[5]));
+	keyframes.push_back(KeyFrame(helicopter, cps[6]));
+	keyframes.push_back(KeyFrame(helicopter, cps[7]));
 
 	camera = make_shared<Camera>();
 	
@@ -147,11 +146,55 @@ static void init()
 	// of your OpenGL error.
 	GLSL::checkError(GET_FILE_LINE);
 }
+void catmull_rom_spline() {
 
+	glm::mat4 G;
+	int ncps = cps.size();
+	float u;
+	float stepsize = 0.01;
+	
+	glColor3f(0, 0, 0);
+	glBegin(GL_LINE_STRIP);
+	// will jump for every four points
+	for (int i = 0; i < ncps - 3; i += 1) {
+
+		G[0] = glm::vec4(cps[i], 0);
+		G[1] = glm::vec4(cps[i + 1], 0);
+		G[2] = glm::vec4(cps[i + 2], 0);
+		G[3] = glm::vec4(cps[i + 3], 0);
+		u = 0;
+		while (u <= 1) {
+			if (u > 1) u = 1;
+			glm::vec4 ubar(1, u, u*u, u*u*u);
+			glm::vec4 p = G*(Bcr*ubar);
+			glVertex3f(p.x, p.y, p.z);
+			u += stepsize;
+		}
+	}
+	glEnd();
+}
+void interpolate(shared_ptr<Program> prog, shared_ptr<MatrixStack> MV, float u) {
+	glm::mat4 G;
+	G[0] = glm::vec4(cps[(int)floor(u)], 0);
+	G[1] = glm::vec4(cps[(int)floor(u) + 1], 0);
+	G[2] = glm::vec4(cps[(int)floor(u) + 2], 0);
+	G[3] = glm::vec4(cps[(int)floor(u) + 3], 0);
+	u = fmod(u, 1.0);
+	glm::vec4 uVec(1, u, u*u, u*u*u);
+	glm::vec4 p = G*Bcr*uVec;
+	MV->pushMatrix();
+	MV->translate(p.x, p.y, p.z);
+	helicopter->draw(prog, MV);
+	MV->popMatrix();
+}
 void render()
 {
 	// Update time.
 	double t = glfwGetTime();
+	// Alpha is the linear interpolation parameter between 0 and 1
+	float alpha = std::fmod(0.5f*t, 1.0f);
+	float umax = keyframes.size() - 3;
+	float u = std::fmod(t, umax);
 	
 	// Get current frame buffer size.
 	int width, height;
@@ -182,6 +225,7 @@ void render()
 	P->pushMatrix();
 	camera->applyProjectionMatrix(P);
 	MV->pushMatrix();
+
 	camera->applyViewMatrix(MV);
 	
 	// Draw origin frame
@@ -214,16 +258,13 @@ void render()
 	glEnd();
 	progSimple->unbind();
 	GLSL::checkError(GET_FILE_LINE);
-
-
 	
 	// Draw the bunnies
 	progNormal->bind();
 	// Send projection matrix (same for all bunnies)
 	glUniformMatrix4fv(progNormal->getUniform("P"), 1, GL_FALSE, glm::value_ptr(P->topMatrix()));
 	
-	// Alpha is the linear interpolation parameter between 0 and 1
-	float alpha = std::fmod(0.5f*t, 1.0f);
+
 	
 	// The axes of rotatio for the source and target bunnies
 	glm::vec3 axis0, axis1;
@@ -251,10 +292,24 @@ void render()
 
 	MV->pushMatrix();
 	helicopter->draw(progNormal, MV);
+	if (keyToggles[(unsigned)'k'] || keyToggles[(unsigned)'K']) {
+		helicopter->propRotate(true);
+		
+		catmull_rom_spline();
+		
+		for (int i = 0; i < keyframes.size(); i++) {
+			keyframes[i].drawKeyFrame(progNormal, MV);
+		}
+
+		interpolate(progNormal, MV, u);
+	}
+	else {
+		helicopter->propRotate(false);
+		helicopter->draw(progNormal, MV);
+	}
 	MV->popMatrix();
 
 	progNormal->unbind();
-	
 	// Pop stacks
 	MV->popMatrix();
 	P->popMatrix();
