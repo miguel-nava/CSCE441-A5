@@ -300,10 +300,14 @@ void render()
 {
 	// Update time.
 	double t = glfwGetTime();
-	float tmax = 20;
+	float tmax = 10;
 	float tNorm = std::fmod(t, tmax)/(tmax+1);
-	//float sNorm = tNorm;
-	float sNorm = 117.03*tNorm*tNorm*tNorm*tNorm*tNorm - 335.24*tNorm*tNorm*tNorm*tNorm + 338.13*tNorm*tNorm*tNorm - 140.76*tNorm*tNorm + 20.838*tNorm - 4.1E-11;
+	float sNorm;
+	if (keyToggles[(unsigned)'q']) {
+		sNorm = 117.03*tNorm*tNorm*tNorm*tNorm*tNorm - 335.24*tNorm*tNorm*tNorm*tNorm + 338.13*tNorm*tNorm*tNorm - 140.76*tNorm*tNorm + 20.838*tNorm - 4.1E-11;
+	}else {
+		sNorm = tNorm;
+	}
 	float s = smax*sNorm;
 	float u = s2u(s);
 	
