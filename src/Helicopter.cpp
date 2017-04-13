@@ -50,7 +50,7 @@ void Helicopter::draw(const std::shared_ptr<Program> prog, std::shared_ptr<Matri
 		theta = 0;
 	}
 	MV->pushMatrix();
-	MV->translate(0, 0.5, 0);
+	//MV->translate(0, 0.5, 0);
 	// Helicopter_prop1 
 	MV->pushMatrix();
 	MV->translate(0.0, 0.4819, 0.0);
